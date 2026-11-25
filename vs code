@@ -1,0 +1,150 @@
+
+name: Snowflake CI/CD Deployment
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'snowflake_objects/**'
+      - '.github/workflows/**'
+
+  workflow_dispatch:
+
+jobs:
+  deploy-dev:
+    name: Deploy to Snowflake DEV
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install schemachange
+        run: pip install schemachange==4.4.0
+
+      - name: Create private key file
+        env:
+          SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
+        run: |
+          printf '%s' "$SNOWFLAKE_PRIVATE_KEY" > "$RUNNER_TEMP/snowflake_key.p8"
+          chmod 600 "$RUNNER_TEMP/snowflake_key.p8"
+
+      - name: Deploy SQL changes to DEV
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+        run: |
+          schemachange deploy \
+            --snowflake-account "$SNOWFLAKE_ACCOUNT" \
+            --snowflake-user "$SNOWFLAKE_USER" \
+            --snowflake-role "$SNOWFLAKE_ROLE" \
+            --snowflake-warehouse "$SNOWFLAKE_WAREHOUSE" \
+            --snowflake-database "$SNOWFLAKE_DATABASE" \
+            --snowflake-schema "$SNOWFLAKE_SCHEMA" \
+            --snowflake-private-key-file "$RUNNER_TEMP/snowflake_key.p8" \
+            --schemachange-root-folder snowflake_objects \
+            --schemachange-change-history-table "$SNOWFLAKE_DATABASE.$SNOWFLAKE_SCHEMA.CHANGE_HISTORY" \
+            --schemachange-create-change-history-table
+
+
+
+
+  deploy-preprod:
+    name: Deploy to Snowflake PRE-PROD
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install schemachange
+        run: pip install schemachange==4.4.0
+
+      - name: Create private key file
+        env:
+          SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
+        run: |
+          printf '%s' "$SNOWFLAKE_PRIVATE_KEY" > "$RUNNER_TEMP/snowflake_key.p8"
+          chmod 600 "$RUNNER_TEMP/snowflake_key.p8"
+
+      - name: Deploy SQL changes to PRE-PROD
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+        run: |
+          schemachange deploy \
+            --snowflake-account "$SNOWFLAKE_ACCOUNT" \
+            --snowflake-user "$SNOWFLAKE_USER" \
+            --snowflake-role "$SNOWFLAKE_ROLE" \
+            --snowflake-warehouse "$SNOWFLAKE_WAREHOUSE" \
+            --snowflake-database "CICD_PRE_PROD_DB" \
+            --snowflake-schema "CICD_SCHEMA" \
+            --snowflake-private-key-file "$RUNNER_TEMP/snowflake_key.p8" \
+            --schemachange-root-folder snowflake_objects \
+            --schemachange-change-history-table "CICD_PRE_PROD_DB.CICD_SCHEMA.CHANGE_HISTORY" \
+            --schemachange-create-change-history-table
+
+
+
+  deploy-prod:
+    name: Deploy to Snowflake PROD
+    runs-on: ubuntu-latest
+    needs: deploy-preprod
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install schemachange
+        run: pip install schemachange==4.4.0
+
+      - name: Create private key file
+        env:
+          SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
+        run: |
+          printf '%s' "$SNOWFLAKE_PRIVATE_KEY" > "$RUNNER_TEMP/snowflake_key.p8"
+          chmod 600 "$RUNNER_TEMP/snowflake_key.p8"
+
+      - name: Deploy SQL changes to PROD
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+        run: |
+          schemachange deploy \
+            --snowflake-account "$SNOWFLAKE_ACCOUNT" \
+            --snowflake-user "$SNOWFLAKE_USER" \
+            --snowflake-role "$SNOWFLAKE_ROLE" \
+            --snowflake-warehouse "$SNOWFLAKE_WAREHOUSE" \
+            --snowflake-database "CICD_PROD_DB" \
+            --snowflake-schema "CICD_SCHEMA" \
+            --snowflake-private-key-file "$RUNNER_TEMP/snowflake_key.p8" \
+            --schemachange-root-folder snowflake_objects \
+            --schemachange-change-history-table "CICD_PROD_DB.CICD_SCHEMA.CHANGE_HISTORY" \
+            --schemachange-create-change-history-table
+
