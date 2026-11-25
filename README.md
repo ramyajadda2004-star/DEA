@@ -111,6 +111,4 @@ ORDER BY VERSION;
 - Consistent across environments
 - Reduced manual effort
 
-## Author
 
-**Your Name** · [@your-username](https://github.com/your-username)
